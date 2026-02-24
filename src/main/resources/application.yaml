@@ -47,3 +47,7 @@ app:
   crypto:
     key-version: v1
     aes-key: aes-key
+
+  storage:
+    local-root: storage/uploads
+    max-photo-bytes: 5242880

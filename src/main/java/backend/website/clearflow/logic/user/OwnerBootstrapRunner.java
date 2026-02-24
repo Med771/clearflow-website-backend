@@ -29,7 +29,7 @@ public class OwnerBootstrapRunner implements ApplicationRunner {
     @Override
     @Transactional
     public void run(@NonNull ApplicationArguments args) {
-        UserEntity owner = userRepository.findByRole(UserRole.OWNER).orElseGet(UserEntity::new);
+        UserEntity owner = userRepository.findFirstByRoleOrderByCreatedAtAsc(UserRole.OWNER).orElseGet(UserEntity::new);
         owner.setRole(UserRole.OWNER);
         owner.setEmail(ownerProperties.email().trim().toLowerCase());
         owner.setPassword(passwordEncoder.encode(ownerProperties.password()));

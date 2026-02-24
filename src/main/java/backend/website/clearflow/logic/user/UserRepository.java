@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<UserEntity, UUID>, JpaSpecificationExecutor<UserEntity> {
     Optional<UserEntity> findByEmailIgnoreCase(String email);
-    Optional<UserEntity> findByRole(UserRole role);
+    Optional<UserEntity> findFirstByRoleOrderByCreatedAtAsc(UserRole role);
 
     boolean existsByRole(UserRole role);
 }
