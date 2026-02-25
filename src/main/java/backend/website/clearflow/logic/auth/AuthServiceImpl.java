@@ -4,8 +4,15 @@ import backend.website.clearflow.config.property.JwtProperties;
 import backend.website.clearflow.helper.AuthTokenHashHelper;
 import backend.website.clearflow.logic.auth.dto.AuthLoginRequest;
 import backend.website.clearflow.logic.auth.dto.AuthTokensResponse;
+import backend.website.clearflow.logic.auth.dto.RegisterSellerRequest;
+import backend.website.clearflow.logic.auth.dto.RegisterSellerResponse;
+import backend.website.clearflow.logic.profile.SellerProfileEntity;
+import backend.website.clearflow.logic.profile.SellerProfileRepository;
+import backend.website.clearflow.logic.profile.verification.SellerVerificationStatus;
 import backend.website.clearflow.logic.user.UserEntity;
 import backend.website.clearflow.logic.user.UserRepository;
+import backend.website.clearflow.model.UserRole;
+import backend.website.clearflow.model.error.BadRequestException;
 import backend.website.clearflow.model.error.UnauthorizedException;
 import backend.website.clearflow.security.AuthenticatedUser;
 import backend.website.clearflow.security.JwtService;
@@ -13,6 +20,7 @@ import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +31,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
@@ -32,23 +41,49 @@ public class AuthServiceImpl implements AuthService {
     private final AuthTokenHashHelper authTokenHashHelper;
     private final PasswordEncoder passwordEncoder;
     private final JwtProperties jwtProperties;
+    private final SellerProfileRepository sellerProfileRepository;
 
-    public AuthServiceImpl(
-            UserRepository userRepository,
-            RefreshSessionRepository refreshSessionRepository,
-            JwtService jwtService,
-            AuthCookieService authCookieService,
-            AuthTokenHashHelper authTokenHashHelper,
-            PasswordEncoder passwordEncoder,
-            JwtProperties jwtProperties
-    ) {
-        this.userRepository = userRepository;
-        this.refreshSessionRepository = refreshSessionRepository;
-        this.jwtService = jwtService;
-        this.authCookieService = authCookieService;
-        this.authTokenHashHelper = authTokenHashHelper;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtProperties = jwtProperties;
+    @Override
+    @Transactional
+    public RegisterSellerResponse registerSeller(RegisterSellerRequest request) {
+        String email = request.email().trim().toLowerCase();
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new BadRequestException("User with this email already exists");
+        }
+
+        UserEntity sellerUser = new UserEntity();
+        sellerUser.setEmail(email);
+        sellerUser.setPassword(passwordEncoder.encode(request.password()));
+        sellerUser.setRole(UserRole.SELLER);
+        sellerUser.setActive(true);
+        sellerUser.setBlock(false);
+        sellerUser.setSessionVersion(0);
+        sellerUser = userRepository.save(sellerUser);
+
+        SellerProfileEntity profile = new SellerProfileEntity();
+        profile.setUserId(sellerUser.getId());
+        profile.setFullName(normalizeText(request.fullName()));
+        profile.setContactPhone(normalizeText(request.contactPhone()));
+        profile.setCompanyName(normalizeText(request.companyName()));
+        profile.setInn(normalizeText(request.inn()));
+        profile.setBankName(normalizeNullableText(request.bankName()));
+        profile.setBik(normalizeNullableText(request.bik()));
+        profile.setSettlementAccount(normalizeNullableText(request.settlementAccount()));
+        profile.setCorporateAccount(normalizeNullableText(request.corporateAccount()));
+        profile.setAddress(normalizeNullableText(request.address()));
+        profile.setOzonSellerLink(normalizeNullableText(request.ozonSellerLink()));
+        profile.setVerificationStatus(SellerVerificationStatus.PENDING);
+        profile.setVerificationComment("Profile is waiting for admin review");
+        profile.setVerificationSubmittedAt(Instant.now());
+        sellerProfileRepository.save(profile);
+
+        return new RegisterSellerResponse(
+                sellerUser.getId(),
+                sellerUser.getEmail(),
+                sellerUser.getRole(),
+                SellerVerificationStatus.PENDING,
+                "Profile is created and waiting for admin verification"
+        );
     }
 
     @Override
@@ -189,6 +224,18 @@ public class AuthServiceImpl implements AuthService {
     private void writeCookies(HttpServletResponse response, TokenPair pair) {
         authCookieService.writeAccessCookie(response, pair.accessToken());
         authCookieService.writeRefreshCookie(response, pair.refreshToken());
+    }
+
+    private String normalizeText(String value) {
+        return value.trim();
+    }
+
+    private String normalizeNullableText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private record TokenPair(String accessToken, String refreshToken) {

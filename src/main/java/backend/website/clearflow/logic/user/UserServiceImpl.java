@@ -1,6 +1,9 @@
 package backend.website.clearflow.logic.user;
 
 import backend.website.clearflow.helper.AesGcmCipherHelper;
+import backend.website.clearflow.logic.profile.SellerProfileEntity;
+import backend.website.clearflow.logic.profile.SellerProfileRepository;
+import backend.website.clearflow.logic.profile.verification.SellerVerificationStatus;
 import backend.website.clearflow.logic.user.dto.CreateUserRequest;
 import backend.website.clearflow.logic.user.dto.UpdateUserRequest;
 import backend.website.clearflow.logic.user.dto.UserResponse;
@@ -9,6 +12,7 @@ import backend.website.clearflow.model.error.BadRequestException;
 import backend.website.clearflow.model.error.ForbiddenException;
 import backend.website.clearflow.model.error.NotFoundException;
 import backend.website.clearflow.security.AuthContextService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -21,6 +25,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
@@ -29,27 +34,13 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final AuthContextService authContextService;
     private final AesGcmCipherHelper aesGcmCipherHelper;
-
-    public UserServiceImpl(
-            UserRepository userRepository,
-            UserMapper userMapper,
-            UserAccessPolicy userAccessPolicy,
-            PasswordEncoder passwordEncoder,
-            AuthContextService authContextService,
-            AesGcmCipherHelper aesGcmCipherHelper
-    ) {
-        this.userRepository = userRepository;
-        this.userMapper = userMapper;
-        this.userAccessPolicy = userAccessPolicy;
-        this.passwordEncoder = passwordEncoder;
-        this.authContextService = authContextService;
-        this.aesGcmCipherHelper = aesGcmCipherHelper;
-    }
+    private final SellerProfileRepository sellerProfileRepository;
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(String search, Set<UserRole> roles, UUID parentId, boolean includeInactive, Pageable pageable) {
         UserEntity actor = authContextService.currentActorOrThrow();
+        ensureSellerApproved(actor);
         if (!userAccessPolicy.canViewAny(actor.getRole())) {
             return Page.empty(pageable);
         }
@@ -67,6 +58,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
         UserEntity actor = authContextService.currentActorOrThrow();
+        ensureSellerApproved(actor);
         validateCreatePermission(actor, request.role());
 
         if (userRepository.findByEmailIgnoreCase(request.email()).isPresent()) {
@@ -82,13 +74,16 @@ public class UserServiceImpl implements UserService {
         entity.setSessionVersion(0);
         entity.setParentId(resolveParentId(actor, request));
         applyOzonKey(entity, request.role(), request.ozonApiKey());
-        return userMapper.toResponse(userRepository.save(entity));
+        UserEntity saved = userRepository.save(entity);
+        initializeSellerProfileForManagedCreation(saved, actor);
+        return userMapper.toResponse(saved);
     }
 
     @Override
     @Transactional
     public UserResponse updateUser(UUID userId, UpdateUserRequest request) {
         UserEntity actor = authContextService.currentActorOrThrow();
+        ensureSellerApproved(actor);
         UserEntity target = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
 
         validateManagePermission(actor, target);
@@ -118,6 +113,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse softDeleteUser(UUID userId) {
         UserEntity actor = authContextService.currentActorOrThrow();
+        ensureSellerApproved(actor);
         UserEntity target = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         validateManagePermission(actor, target);
         validateOwnerMutation(target);
@@ -183,5 +179,33 @@ public class UserServiceImpl implements UserService {
         }
         entity.setOzonApiKeyCiphertext(aesGcmCipherHelper.encrypt(ozonApiKey.trim()));
         entity.setOzonApiKeyKeyVersion(aesGcmCipherHelper.currentKeyVersion());
+    }
+
+    private void ensureSellerApproved(UserEntity actor) {
+        if (actor.getRole() != UserRole.SELLER) {
+            return;
+        }
+        SellerProfileEntity profile = sellerProfileRepository.findByUserId(actor.getId())
+                .orElseThrow(() -> new ForbiddenException("Seller profile is not initialized"));
+        if (profile.getVerificationStatus() != SellerVerificationStatus.APPROVED) {
+            throw new ForbiddenException("Seller profile is not verified yet");
+        }
+    }
+
+    private void initializeSellerProfileForManagedCreation(UserEntity user, UserEntity actor) {
+        if (user.getRole() != UserRole.SELLER) {
+            return;
+        }
+        SellerProfileEntity profile = sellerProfileRepository.findByUserId(user.getId()).orElseGet(() -> {
+            SellerProfileEntity newProfile = new SellerProfileEntity();
+            newProfile.setUserId(user.getId());
+            return newProfile;
+        });
+        profile.setVerificationStatus(SellerVerificationStatus.APPROVED);
+        profile.setVerificationComment("Profile approved on managed creation");
+        profile.setVerificationSubmittedAt(java.time.Instant.now());
+        profile.setVerifiedAt(java.time.Instant.now());
+        profile.setVerifiedBy(actor.getId());
+        sellerProfileRepository.save(profile);
     }
 }

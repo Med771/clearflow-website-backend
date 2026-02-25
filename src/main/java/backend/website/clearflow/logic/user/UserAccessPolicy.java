@@ -13,8 +13,11 @@ public class UserAccessPolicy {
     }
 
     public boolean canCreate(UserRole actorRole, UserRole targetRole) {
+        if (targetRole == UserRole.OWNER) {
+            return false;
+        }
         return switch (actorRole) {
-            case OWNER -> true;
+            case OWNER -> targetRole == UserRole.ADMIN || targetRole == UserRole.SELLER || targetRole == UserRole.MANAGER;
             case ADMIN -> targetRole == UserRole.SELLER || targetRole == UserRole.MANAGER;
             case SELLER -> targetRole == UserRole.MANAGER;
             case MANAGER -> false;
