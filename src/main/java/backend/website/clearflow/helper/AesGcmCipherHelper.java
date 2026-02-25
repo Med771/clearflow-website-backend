@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -22,9 +23,26 @@ public class AesGcmCipherHelper {
 
     public AesGcmCipherHelper(CryptoProperties properties) {
         this.properties = properties;
-        byte[] key = Base64.getDecoder().decode(properties.aesKey());
+        byte[] key = resolveKey(properties.aesKey());
         this.keySpec = new SecretKeySpec(key, "AES");
         this.secureRandom = new SecureRandom();
+    }
+
+    private byte[] resolveKey(String rawKey) {
+        try {
+            byte[] decoded = Base64.getDecoder().decode(rawKey);
+            if (decoded.length == 16 || decoded.length == 24 || decoded.length == 32) {
+                return decoded;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Fallback below for non-base64 keys.
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return digest.digest(rawKey.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Failed to resolve crypto key", exception);
+        }
     }
 
     public String encrypt(String plainText) {

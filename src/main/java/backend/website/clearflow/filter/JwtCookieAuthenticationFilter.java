@@ -73,7 +73,6 @@ public class JwtCookieAuthenticationFilter extends OncePerRequestFilter {
             long sessionVersion = jwtService.extractSessionVersion(claims);
             return userRepository.findById(userId)
                     .filter(UserEntity::isActive)
-                    .filter(user -> !user.isBlock())
                     .filter(user -> user.getSessionVersion() == sessionVersion)
                     .map(user -> new AuthenticatedUser(user.getId(), user.getRole(), user.isBlock(), user.isActive()));
         } catch (Exception ignored) {
