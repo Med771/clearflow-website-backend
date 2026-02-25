@@ -1,9 +1,11 @@
 package backend.website.clearflow.logic.profile;
 
 import backend.website.clearflow.logic.profile.dto.MyProfileResponse;
-import backend.website.clearflow.logic.profile.dto.ProfilePhotoResponse;
 import backend.website.clearflow.logic.profile.dto.UpdateMyProfileRequest;
+import backend.website.clearflow.logic.profile.photo.ProfilePhotoService;
+import backend.website.clearflow.logic.profile.photo.dto.ProfilePhotoResponse;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -22,15 +24,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/profile")
+@RequiredArgsConstructor
 public class ProfileController {
 
     private final ProfileService profileService;
     private final ProfilePhotoService profilePhotoService;
-
-    public ProfileController(ProfileService profileService, ProfilePhotoService profilePhotoService) {
-        this.profileService = profileService;
-        this.profilePhotoService = profilePhotoService;
-    }
 
     @GetMapping("/me")
     public MyProfileResponse getMyProfile() {

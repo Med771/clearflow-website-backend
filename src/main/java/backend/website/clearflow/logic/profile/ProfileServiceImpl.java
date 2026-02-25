@@ -2,6 +2,8 @@ package backend.website.clearflow.logic.profile;
 
 import backend.website.clearflow.logic.profile.dto.MyProfileResponse;
 import backend.website.clearflow.logic.profile.dto.UpdateMyProfileRequest;
+import backend.website.clearflow.logic.profile.photo.UserPhotoRepository;
+import backend.website.clearflow.logic.profile.verification.SellerVerificationStatus;
 import backend.website.clearflow.helper.FileStorageService;
 import backend.website.clearflow.logic.auth.RefreshSessionEntity;
 import backend.website.clearflow.logic.auth.RefreshSessionRepository;
@@ -11,6 +13,7 @@ import backend.website.clearflow.model.UserRole;
 import backend.website.clearflow.model.error.BadRequestException;
 import backend.website.clearflow.model.error.ForbiddenException;
 import backend.website.clearflow.security.AuthContextService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class ProfileServiceImpl implements ProfileService {
 
     private final AuthContextService authContextService;
@@ -27,26 +31,10 @@ public class ProfileServiceImpl implements ProfileService {
     private final FileStorageService fileStorageService;
     private final RefreshSessionRepository refreshSessionRepository;
 
-    public ProfileServiceImpl(
-            AuthContextService authContextService,
-            UserRepository userRepository,
-            SellerProfileRepository sellerProfileRepository,
-            UserPhotoRepository userPhotoRepository,
-            FileStorageService fileStorageService,
-            RefreshSessionRepository refreshSessionRepository
-    ) {
-        this.authContextService = authContextService;
-        this.userRepository = userRepository;
-        this.sellerProfileRepository = sellerProfileRepository;
-        this.userPhotoRepository = userPhotoRepository;
-        this.fileStorageService = fileStorageService;
-        this.refreshSessionRepository = refreshSessionRepository;
-    }
-
     @Override
     @Transactional(readOnly = true)
     public MyProfileResponse getMyProfile() {
-        UserEntity actor = authContextService.currentActorOrThrow();
+        UserEntity actor = authContextService.currentActiveActorAllowBlockedOrThrow();
         SellerProfileEntity sellerProfile = actor.getRole() == UserRole.SELLER
                 ? sellerProfileRepository.findByUserId(actor.getId()).orElse(null)
                 : null;
@@ -56,7 +44,7 @@ public class ProfileServiceImpl implements ProfileService {
     @Override
     @Transactional
     public MyProfileResponse updateMyProfile(UpdateMyProfileRequest request) {
-        UserEntity actor = authContextService.currentActorOrThrow();
+        UserEntity actor = authContextService.currentActiveActorAllowBlockedOrThrow();
         if (actor.getRole() != UserRole.SELLER) {
             throw new BadRequestException("Bank details are available only for seller profile");
         }
@@ -64,9 +52,18 @@ public class ProfileServiceImpl implements ProfileService {
         SellerProfileEntity profile = sellerProfileRepository.findByUserId(actor.getId()).orElseGet(() -> {
             SellerProfileEntity newProfile = new SellerProfileEntity();
             newProfile.setUserId(actor.getId());
+            newProfile.setVerificationStatus(SellerVerificationStatus.PENDING);
+            newProfile.setVerificationComment("Profile is waiting for admin review");
+            newProfile.setVerificationSubmittedAt(Instant.now());
             return newProfile;
         });
 
+        if (request.fullName() != null) {
+            profile.setFullName(normalizeText(request.fullName()));
+        }
+        if (request.contactPhone() != null) {
+            profile.setContactPhone(normalizeText(request.contactPhone()));
+        }
         if (request.companyName() != null) {
             profile.setCompanyName(normalizeText(request.companyName()));
         }
@@ -88,6 +85,17 @@ public class ProfileServiceImpl implements ProfileService {
         if (request.address() != null) {
             profile.setAddress(normalizeText(request.address()));
         }
+        if (request.ozonSellerLink() != null) {
+            profile.setOzonSellerLink(normalizeText(request.ozonSellerLink()));
+        }
+
+        if (profile.getVerificationStatus() == SellerVerificationStatus.REJECTED) {
+            profile.setVerificationStatus(SellerVerificationStatus.PENDING);
+            profile.setVerificationComment("Profile was resubmitted and is waiting for admin review");
+            profile.setVerificationSubmittedAt(Instant.now());
+            profile.setVerifiedAt(null);
+            profile.setVerifiedBy(null);
+        }
 
         SellerProfileEntity saved = sellerProfileRepository.save(profile);
         return toResponse(actor, saved);
@@ -96,7 +104,7 @@ public class ProfileServiceImpl implements ProfileService {
     @Override
     @Transactional
     public void deleteMyProfile() {
-        UserEntity actor = authContextService.currentActorOrThrow();
+        UserEntity actor = authContextService.currentActiveActorAllowBlockedOrThrow();
         if (actor.getRole() == UserRole.OWNER) {
             throw new ForbiddenException("Owner cannot delete own profile");
         }
@@ -130,13 +138,18 @@ public class ProfileServiceImpl implements ProfileService {
                 actor.getCreatorId(),
                 actor.getCreatedAt(),
                 actor.getUpdatedAt(),
+                profile != null ? profile.getFullName() : null,
+                profile != null ? profile.getContactPhone() : null,
                 profile != null ? profile.getCompanyName() : null,
                 profile != null ? profile.getBankName() : null,
                 profile != null ? profile.getInn() : null,
                 profile != null ? profile.getBik() : null,
                 profile != null ? profile.getSettlementAccount() : null,
                 profile != null ? profile.getCorporateAccount() : null,
-                profile != null ? profile.getAddress() : null
+                profile != null ? profile.getAddress() : null,
+                profile != null ? profile.getOzonSellerLink() : null,
+                profile != null ? profile.getVerificationStatus() : null,
+                profile != null ? profile.getVerificationComment() : null
         );
     }
 
