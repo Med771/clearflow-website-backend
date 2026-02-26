@@ -112,10 +112,7 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
         if (actor.getRole() == UserRole.ADMIN) {
-            UserEntity seller = userRepository.findById(sellerId).orElseThrow(() -> new NotFoundException("Seller not found"));
-            if (seller.getParentId() != null && seller.getParentId().equals(actor.getId())) {
-                return;
-            }
+            return;
         }
         throw new ForbiddenException("Seller is outside of your scope");
     }

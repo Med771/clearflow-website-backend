@@ -8,7 +8,7 @@ WORKDIR /app
 COPY pom.xml .
 
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -q dependency:go-offline
+    mvn -B dependency:go-offline
 
 COPY src ./src
 
@@ -29,4 +29,6 @@ COPY --from=builder /app/target/*.jar app.jar
 
 USER appuser
 
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
+ENV JAVA_OPTS="-Xms256m -Xmx768m"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -XX:MaxRAMPercentage=75 -jar app.jar"]

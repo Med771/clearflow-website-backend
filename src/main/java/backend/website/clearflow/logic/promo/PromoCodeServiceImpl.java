@@ -147,10 +147,6 @@ public class PromoCodeServiceImpl implements PromoCodeService {
             if (seller.getRole() != UserRole.SELLER) {
                 throw new BadRequestException("sellerId must refer to seller role");
             }
-            if (actor.getRole() == UserRole.ADMIN
-                    && (seller.getParentId() == null || !seller.getParentId().equals(actor.getId()))) {
-                throw new ForbiddenException("Seller is outside of your scope");
-            }
             return requestedSellerId;
         }
         throw new ForbiddenException("Role cannot manage promo codes");
@@ -164,10 +160,7 @@ public class PromoCodeServiceImpl implements PromoCodeService {
             return;
         }
         if (actor.getRole() == UserRole.ADMIN) {
-            UserEntity seller = userRepository.findById(sellerId).orElseThrow(() -> new NotFoundException("Seller not found"));
-            if (seller.getParentId() != null && seller.getParentId().equals(actor.getId())) {
-                return;
-            }
+            return;
         }
         throw new ForbiddenException("Seller is outside of your scope");
     }
