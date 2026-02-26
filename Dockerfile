@@ -25,10 +25,10 @@ WORKDIR /app
 
 RUN useradd -r -u 1001 appuser
 
+RUN mkdir -p /app/storage && chown -R appuser:appuser /app/storage
+
 COPY --from=builder /app/target/*.jar app.jar
 
 USER appuser
-
-RUN mkdir -p /app/storage && chown -R appuser:appuser /app/storage
 
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
