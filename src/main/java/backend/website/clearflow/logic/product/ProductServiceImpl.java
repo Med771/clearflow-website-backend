@@ -56,9 +56,13 @@ public class ProductServiceImpl implements ProductService {
         if (productRepository.existsBySellerIdAndOzonProductId(targetSellerId, request.ozonProductId())) {
             throw new BadRequestException("Product with this ozonProductId already exists for seller");
         }
+        String normalizedName = request.name().trim();
+        if (normalizedName.isEmpty()) {
+            throw new BadRequestException("name cannot be blank");
+        }
         ProductEntity entity = new ProductEntity();
         entity.setSellerId(targetSellerId);
-        entity.setName(request.name().trim());
+        entity.setName(normalizedName);
         entity.setOzonProductId(request.ozonProductId());
         entity.setActive(true);
         return productMapper.toResponse(productRepository.save(entity));
@@ -71,7 +75,11 @@ public class ProductServiceImpl implements ProductService {
         ProductEntity entity = productRepository.findById(id).orElseThrow(() -> new NotFoundException("Product not found"));
         validateSellerScope(actor, entity.getSellerId());
         if (request.name() != null) {
-            entity.setName(request.name().trim());
+            String normalized = request.name().trim();
+            if (normalized.isEmpty()) {
+                throw new BadRequestException("name cannot be blank");
+            }
+            entity.setName(normalized);
         }
         if (request.isActive() != null) {
             entity.setActive(request.isActive());
@@ -90,12 +98,6 @@ public class ProductServiceImpl implements ProductService {
             UserEntity seller = userRepository.findById(requestedSellerId).orElseThrow(() -> new NotFoundException("Seller not found"));
             if (seller.getRole() != UserRole.SELLER) {
                 throw new BadRequestException("sellerId must refer to seller role");
-            }
-            if (actor.getRole() == UserRole.ADMIN && !requestedSellerId.equals(actor.getId()) && !requestedSellerId.equals(seller.getId())) {
-                // Admin scope is validated by creator/parent chain in existing user policies.
-                if (!(seller.getParentId() != null && seller.getParentId().equals(actor.getId()))) {
-                    throw new ForbiddenException("Seller is outside of your scope");
-                }
             }
             return requestedSellerId;
         }

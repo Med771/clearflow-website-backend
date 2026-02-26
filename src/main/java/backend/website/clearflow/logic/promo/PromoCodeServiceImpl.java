@@ -61,9 +61,13 @@ public class PromoCodeServiceImpl implements PromoCodeService {
         if (promoCodeRepository.existsBySellerIdAndActionId(targetSellerId, request.actionId())) {
             throw new BadRequestException("Promo code with this actionId already exists for seller");
         }
+        String normalizedName = request.name().trim();
+        if (normalizedName.isEmpty()) {
+            throw new BadRequestException("name cannot be blank");
+        }
         PromoCodeEntity entity = new PromoCodeEntity();
         entity.setSellerId(targetSellerId);
-        entity.setName(request.name().trim());
+        entity.setName(normalizedName);
         entity.setActionId(request.actionId());
         entity.setActive(true);
         PromoCodeEntity saved = promoCodeRepository.save(entity);
@@ -78,7 +82,11 @@ public class PromoCodeServiceImpl implements PromoCodeService {
         PromoCodeEntity entity = promoCodeRepository.findById(id).orElseThrow(() -> new NotFoundException("Promo code not found"));
         validateSellerScope(actor, entity.getSellerId());
         if (request.name() != null) {
-            entity.setName(request.name().trim());
+            String normalized = request.name().trim();
+            if (normalized.isEmpty()) {
+                throw new BadRequestException("name cannot be blank");
+            }
+            entity.setName(normalized);
         }
         if (request.isActive() != null) {
             entity.setActive(request.isActive());
