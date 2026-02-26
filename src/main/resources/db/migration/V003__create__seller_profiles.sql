@@ -1,0 +1,23 @@
+CREATE TABLE seller_profiles (
+    user_id UUID PRIMARY KEY,
+    company_name VARCHAR(255) NULL,
+    full_name VARCHAR(255) NULL,
+    contact_phone VARCHAR(30) NULL,
+    bank_name VARCHAR(255) NULL,
+    inn VARCHAR(12) NULL,
+    bik VARCHAR(9) NULL,
+    settlement_account VARCHAR(20) NULL,
+    corporate_account VARCHAR(20) NULL,
+    address VARCHAR(500) NULL,
+    ozon_seller_link VARCHAR(500) NULL,
+    verification_status VARCHAR(20) NOT NULL,
+    verification_comment VARCHAR(2000) NULL,
+    verification_submitted_at TIMESTAMPTZ NULL,
+    verified_at TIMESTAMPTZ NULL,
+    verified_by UUID NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    creator_id UUID NULL,
+    CONSTRAINT fk_seller_profiles_user FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_seller_profiles_verified_by FOREIGN KEY (verified_by) REFERENCES users (id)
+);
