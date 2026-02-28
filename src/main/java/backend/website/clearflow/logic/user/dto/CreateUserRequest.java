@@ -19,6 +19,8 @@ public record CreateUserRequest(
         @NotNull UserRole role,
         @Schema(description = "Родительский пользователь в иерархии")
         UUID parentId,
+        @Schema(description = "Ozon Client-Id продавца")
+        String ozonClientId,
         @Schema(description = "Ozon API ключ в открытом виде (будет зашифрован)")
         String ozonApiKey
 ) {

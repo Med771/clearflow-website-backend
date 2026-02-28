@@ -73,7 +73,7 @@ public class UserServiceImpl implements UserService {
         entity.setActive(true);
         entity.setSessionVersion(0);
         entity.setParentId(resolveParentId(actor, request));
-        applyOzonKey(entity, request.role(), request.ozonApiKey());
+        applyOzonCredentials(entity, request.role(), request.ozonClientId(), request.ozonApiKey());
         UserEntity saved = userRepository.save(entity);
         initializeSellerProfileForManagedCreation(saved, actor);
         return userMapper.toResponse(saved);
@@ -168,11 +168,15 @@ public class UserServiceImpl implements UserService {
         };
     }
 
-    private void applyOzonKey(UserEntity entity, UserRole role, String ozonApiKey) {
+    private void applyOzonCredentials(UserEntity entity, UserRole role, String ozonClientId, String ozonApiKey) {
         if (role != UserRole.SELLER) {
+            entity.setOzonClientId(null);
             entity.setOzonApiKeyCiphertext(null);
             entity.setOzonApiKeyKeyVersion(null);
             return;
+        }
+        if (ozonClientId != null && !ozonClientId.isBlank()) {
+            entity.setOzonClientId(ozonClientId.trim());
         }
         if (ozonApiKey == null || ozonApiKey.isBlank()) {
             return;

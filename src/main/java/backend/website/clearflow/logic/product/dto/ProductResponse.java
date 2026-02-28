@@ -12,6 +12,7 @@ public record ProductResponse(
         @Schema(description = "Название товара") String name,
         @Schema(description = "Идентификатор товара в Ozon") Long ozonProductId,
         @Schema(description = "Товар активен") boolean isActive,
+        @Schema(description = "Актуальная ссылка на фото товара из Ozon", nullable = true) String photoUrl,
         @Schema(description = "Кто создал запись") UUID creatorId,
         @Schema(description = "Дата создания") Instant createdAt,
         @Schema(description = "Дата обновления") Instant updatedAt

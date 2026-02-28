@@ -37,7 +37,7 @@ public class ProductController {
     }
 
     @GetMapping
-    @Operation(summary = "Список товаров", description = "Возвращает список товаров с фильтрацией и пагинацией")
+    @Operation(summary = "Список товаров", description = "Возвращает список товаров с фильтрацией и пагинацией. Поле photoUrl заполняется актуальной ссылкой из Ozon API, если доступны Client-Id и Api-Key продавца.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Список товаров получен"),
             @ApiResponse(responseCode = "403", description = "Недостаточно прав")
@@ -53,7 +53,7 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Получить товар", description = "Возвращает товар по идентификатору")
+    @Operation(summary = "Получить товар", description = "Возвращает товар по идентификатору. Поле photoUrl может быть null, если Ozon API недоступен или не настроены креды продавца.")
     public ProductResponse getById(@PathVariable UUID id) {
         return productService.getById(id);
     }

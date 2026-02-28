@@ -1,8 +1,10 @@
 package backend.website.clearflow.logic.product;
 
+import backend.website.clearflow.helper.AesGcmCipherHelper;
 import backend.website.clearflow.logic.product.dto.CreateProductRequest;
 import backend.website.clearflow.logic.product.dto.ProductResponse;
 import backend.website.clearflow.logic.product.dto.UpdateProductRequest;
+import backend.website.clearflow.logic.product.ozon.OzonProductPicturesClient;
 import backend.website.clearflow.logic.user.UserEntity;
 import backend.website.clearflow.logic.user.UserRepository;
 import backend.website.clearflow.model.UserRole;
@@ -12,12 +14,18 @@ import backend.website.clearflow.model.error.NotFoundException;
 import backend.website.clearflow.security.AuthContextService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +35,8 @@ public class ProductServiceImpl implements ProductService {
     private final ProductMapper productMapper;
     private final AuthContextService authContextService;
     private final UserRepository userRepository;
+    private final AesGcmCipherHelper aesGcmCipherHelper;
+    private final OzonProductPicturesClient ozonProductPicturesClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -36,7 +46,12 @@ public class ProductServiceImpl implements ProductService {
         Specification<ProductEntity> specification = Specification.where(bySeller(targetSellerId))
                 .and(searchByName(search))
                 .and(activeFilter(includeInactive));
-        return productRepository.findAll(specification, pageable).map(productMapper::toResponse);
+        Page<ProductEntity> page = productRepository.findAll(specification, pageable);
+        Map<Long, String> photoLinks = resolvePhotoLinks(targetSellerId, page.getContent());
+        List<ProductResponse> responses = page.getContent().stream()
+                .map(product -> withPhoto(productMapper.toResponse(product), photoLinks.get(product.getOzonProductId())))
+                .toList();
+        return new PageImpl<>(responses, pageable, page.getTotalElements());
     }
 
     @Override
@@ -45,7 +60,8 @@ public class ProductServiceImpl implements ProductService {
         UserEntity actor = authContextService.currentActorOrThrow();
         ProductEntity product = productRepository.findById(id).orElseThrow(() -> new NotFoundException("Product not found"));
         validateSellerScope(actor, product.getSellerId());
-        return productMapper.toResponse(product);
+        Map<Long, String> photoLinks = resolvePhotoLinks(product.getSellerId(), List.of(product));
+        return withPhoto(productMapper.toResponse(product), photoLinks.get(product.getOzonProductId()));
     }
 
     @Override
@@ -56,9 +72,13 @@ public class ProductServiceImpl implements ProductService {
         if (productRepository.existsBySellerIdAndOzonProductId(targetSellerId, request.ozonProductId())) {
             throw new BadRequestException("Product with this ozonProductId already exists for seller");
         }
+        String normalizedName = request.name().trim();
+        if (normalizedName.isEmpty()) {
+            throw new BadRequestException("name cannot be blank");
+        }
         ProductEntity entity = new ProductEntity();
         entity.setSellerId(targetSellerId);
-        entity.setName(request.name().trim());
+        entity.setName(normalizedName);
         entity.setOzonProductId(request.ozonProductId());
         entity.setActive(true);
         return productMapper.toResponse(productRepository.save(entity));
@@ -71,7 +91,11 @@ public class ProductServiceImpl implements ProductService {
         ProductEntity entity = productRepository.findById(id).orElseThrow(() -> new NotFoundException("Product not found"));
         validateSellerScope(actor, entity.getSellerId());
         if (request.name() != null) {
-            entity.setName(request.name().trim());
+            String normalized = request.name().trim();
+            if (normalized.isEmpty()) {
+                throw new BadRequestException("name cannot be blank");
+            }
+            entity.setName(normalized);
         }
         if (request.isActive() != null) {
             entity.setActive(request.isActive());
@@ -91,12 +115,6 @@ public class ProductServiceImpl implements ProductService {
             if (seller.getRole() != UserRole.SELLER) {
                 throw new BadRequestException("sellerId must refer to seller role");
             }
-            if (actor.getRole() == UserRole.ADMIN && !requestedSellerId.equals(actor.getId()) && !requestedSellerId.equals(seller.getId())) {
-                // Admin scope is validated by creator/parent chain in existing user policies.
-                if (!(seller.getParentId() != null && seller.getParentId().equals(actor.getId()))) {
-                    throw new ForbiddenException("Seller is outside of your scope");
-                }
-            }
             return requestedSellerId;
         }
         throw new ForbiddenException("Role cannot manage products");
@@ -110,10 +128,7 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
         if (actor.getRole() == UserRole.ADMIN) {
-            UserEntity seller = userRepository.findById(sellerId).orElseThrow(() -> new NotFoundException("Seller not found"));
-            if (seller.getParentId() != null && seller.getParentId().equals(actor.getId())) {
-                return;
-            }
+            return;
         }
         throw new ForbiddenException("Seller is outside of your scope");
     }
@@ -135,5 +150,48 @@ public class ProductServiceImpl implements ProductService {
             return (root, query, cb) -> cb.conjunction();
         }
         return (root, query, cb) -> cb.isTrue(root.get("isActive"));
+    }
+
+    private ProductResponse withPhoto(ProductResponse response, String photoUrl) {
+        return new ProductResponse(
+                response.id(),
+                response.sellerId(),
+                response.name(),
+                response.ozonProductId(),
+                response.isActive(),
+                photoUrl,
+                response.creatorId(),
+                response.createdAt(),
+                response.updatedAt()
+        );
+    }
+
+    private Map<Long, String> resolvePhotoLinks(UUID sellerId, List<ProductEntity> products) {
+        if (products == null || products.isEmpty()) {
+            return Map.of();
+        }
+        UserEntity seller = userRepository.findById(sellerId).orElse(null);
+        if (seller == null || seller.getOzonApiKeyCiphertext() == null || seller.getOzonApiKeyCiphertext().isBlank()) {
+            return Map.of();
+        }
+        String clientId = seller.getOzonClientId();
+        if (clientId == null || clientId.isBlank()) {
+            return Map.of();
+        }
+        String apiKey;
+        try {
+            apiKey = aesGcmCipherHelper.decrypt(seller.getOzonApiKeyCiphertext());
+        } catch (Exception exception) {
+            return Map.of();
+        }
+        Set<Long> ozonProductIds = products.stream()
+                .map(ProductEntity::getOzonProductId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+        if (ozonProductIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> links = ozonProductPicturesClient.fetchPrimaryPhotoLinks(ozonProductIds, clientId, apiKey);
+        return links == null ? new HashMap<>() : links;
     }
 }

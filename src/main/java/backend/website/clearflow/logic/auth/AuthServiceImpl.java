@@ -58,6 +58,7 @@ public class AuthServiceImpl implements AuthService {
         sellerUser.setActive(true);
         sellerUser.setBlock(false);
         sellerUser.setSessionVersion(0);
+        sellerUser.setOzonClientId(normalizeNullableText(request.ozonClientId()));
         sellerUser = userRepository.save(sellerUser);
 
         SellerProfileEntity profile = new SellerProfileEntity();

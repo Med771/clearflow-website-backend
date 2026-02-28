@@ -52,4 +52,7 @@ public class UserEntity extends BaseEntity {
 
     @Column(name = "ozon_api_key_key_version", length = 50)
     private String ozonApiKeyKeyVersion;
+
+    @Column(name = "ozon_client_id", length = 100)
+    private String ozonClientId;
 }

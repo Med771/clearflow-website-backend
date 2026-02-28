@@ -20,6 +20,8 @@ public record RegisterSellerRequest(
         @NotBlank @Size(max = 255) String companyName,
         @Schema(description = "ИНН (10 или 12 цифр)", example = "7701234567")
         @NotBlank @Pattern(regexp = "^\\d{10}(\\d{2})?$", message = "inn must contain 10 or 12 digits") String inn,
+        @Schema(description = "Client-Id продавца в Ozon", example = "123456")
+        @Size(max = 100) String ozonClientId,
         @Schema(description = "Название банка", example = "ПАО Сбербанк")
         @Size(max = 255) String bankName,
         @Schema(description = "БИК (9 цифр)", example = "044525225")

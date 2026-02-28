@@ -5,12 +5,16 @@ import backend.website.clearflow.logic.stat.dto.PromoStatDailyResponse;
 import backend.website.clearflow.logic.stat.dto.ProductStatsDashboardResponse;
 import backend.website.clearflow.logic.stat.dto.PromoStatsDashboardResponse;
 import backend.website.clearflow.logic.stat.dto.UpsertPromoStatDailyRequest;
+import backend.website.clearflow.logic.stat.report.MonthlyPromoReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,6 +36,7 @@ import java.util.UUID;
 public class PromoStatController {
 
     private final PromoStatService promoStatService;
+    private final MonthlyPromoReportService monthlyPromoReportService;
 
     @PatchMapping("/daily")
     @ResponseStatus(HttpStatus.OK)
@@ -71,6 +76,23 @@ public class PromoStatController {
             @Parameter(description = "Количество элементов в топе") @RequestParam(defaultValue = "10") Integer topLimit
     ) {
         return promoStatService.getProductDashboard(sellerId, productId, parseYearMonth(month), topLimit);
+    }
+
+    @GetMapping(value = "/monthly-report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @Operation(summary = "PDF-отчет за месяц по промокодам", description = "Генерирует PDF-отчет продавца за выбранный месяц: реквизиты, таблица по промокодам (кол-во и доход), итоговые суммы.")
+    public ResponseEntity<byte[]> getMonthlyPromoReportPdf(
+            @Parameter(description = "Идентификатор продавца (для OWNER/ADMIN)") @RequestParam(required = false) UUID sellerId,
+            @Parameter(description = "Месяц в формате YYYY-MM") @RequestParam(required = false) String month,
+            @Parameter(description = "Открывать в браузере (true) или скачивать файлом (false)") @RequestParam(defaultValue = "false") boolean inline
+    ) {
+        YearMonth targetMonth = parseYearMonth(month);
+        byte[] content = monthlyPromoReportService.generateMonthlyPromoReport(sellerId, targetMonth);
+        String filename = "promo-report-" + targetMonth + ".pdf";
+        String disposition = (inline ? "inline" : "attachment") + "; filename=\"" + filename + "\"";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .body(content);
     }
 
     private YearMonth parseYearMonth(String month) {

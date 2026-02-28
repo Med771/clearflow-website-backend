@@ -33,6 +33,7 @@
         <lombok.version>1.18.42</lombok.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <swagger.version>3.0.1</swagger.version>
+        <openpdf.version>3.0.1</openpdf.version>
     </properties>
     <dependencies>
         <dependency>
@@ -50,7 +51,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-
 
         <!-- Swagger API dependency-->
         <dependency>
@@ -138,6 +138,12 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.13.0</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>${openpdf.version}</version>
         </dependency>
     </dependencies>
 

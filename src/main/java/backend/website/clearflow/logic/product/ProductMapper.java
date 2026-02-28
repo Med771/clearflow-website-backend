@@ -8,5 +8,6 @@ import org.mapstruct.Mapping;
 public interface ProductMapper {
 
     @Mapping(target = "isActive", source = "active")
+    @Mapping(target = "photoUrl", ignore = true)
     ProductResponse toResponse(ProductEntity entity);
 }
