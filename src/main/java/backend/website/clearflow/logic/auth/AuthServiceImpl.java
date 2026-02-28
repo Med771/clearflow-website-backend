@@ -6,6 +6,8 @@ import backend.website.clearflow.logic.auth.dto.AuthLoginRequest;
 import backend.website.clearflow.logic.auth.dto.AuthTokensResponse;
 import backend.website.clearflow.logic.auth.dto.RegisterSellerRequest;
 import backend.website.clearflow.logic.auth.dto.RegisterSellerResponse;
+import backend.website.clearflow.logic.auth.refresh.RefreshSessionEntity;
+import backend.website.clearflow.logic.auth.refresh.RefreshSessionRepository;
 import backend.website.clearflow.logic.profile.SellerProfileEntity;
 import backend.website.clearflow.logic.profile.SellerProfileRepository;
 import backend.website.clearflow.logic.profile.verification.SellerVerificationStatus;
@@ -43,6 +45,8 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProperties jwtProperties;
     private final SellerProfileRepository sellerProfileRepository;
 
+    private record TokenPair(String accessToken, String refreshToken) { }
+
     @Override
     @Transactional
     public RegisterSellerResponse registerSeller(RegisterSellerRequest request) {
@@ -51,31 +55,32 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("User with this email already exists");
         }
 
-        UserEntity sellerUser = new UserEntity();
-        sellerUser.setEmail(email);
-        sellerUser.setPassword(passwordEncoder.encode(request.password()));
-        sellerUser.setRole(UserRole.SELLER);
-        sellerUser.setActive(true);
-        sellerUser.setBlock(false);
-        sellerUser.setSessionVersion(0);
-        sellerUser.setOzonClientId(normalizeNullableText(request.ozonClientId()));
+        UserEntity sellerUser = new UserEntity(
+                email,
+                passwordEncoder.encode(request.password()),
+                UserRole.SELLER,
+                true,
+                false,
+                0,
+                request.ozonClientId()
+        );
+
         sellerUser = userRepository.save(sellerUser);
 
-        SellerProfileEntity profile = new SellerProfileEntity();
-        profile.setUserId(sellerUser.getId());
-        profile.setFullName(normalizeText(request.fullName()));
-        profile.setContactPhone(normalizeText(request.contactPhone()));
-        profile.setCompanyName(normalizeText(request.companyName()));
-        profile.setInn(normalizeText(request.inn()));
-        profile.setBankName(normalizeNullableText(request.bankName()));
-        profile.setBik(normalizeNullableText(request.bik()));
-        profile.setSettlementAccount(normalizeNullableText(request.settlementAccount()));
-        profile.setCorporateAccount(normalizeNullableText(request.corporateAccount()));
-        profile.setAddress(normalizeNullableText(request.address()));
-        profile.setOzonSellerLink(normalizeNullableText(request.ozonSellerLink()));
-        profile.setVerificationStatus(SellerVerificationStatus.PENDING);
-        profile.setVerificationComment("Profile is waiting for admin review");
-        profile.setVerificationSubmittedAt(Instant.now());
+        SellerProfileEntity profile = new SellerProfileEntity(
+                sellerUser.getId(),
+                request.fullName(),
+                request.contactPhone(),
+                request.companyName(),
+                request.inn(),
+                request.bankName(),
+                request.bik(),
+                request.settlementAccount(),
+                request.corporateAccount(),
+                request.address(),
+                request.ozonSellerLink()
+        );
+
         sellerProfileRepository.save(profile);
 
         return new RegisterSellerResponse(
@@ -92,15 +97,17 @@ public class AuthServiceImpl implements AuthService {
     public AuthTokensResponse login(AuthLoginRequest request, HttpServletResponse response) {
         UserEntity user = userRepository.findByEmailIgnoreCase(request.email().trim())
                 .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
-        if (!user.isActive() || user.isBlock()) {
-            throw new UnauthorizedException("User is blocked or inactive");
-        }
+
+        authTokenHashHelper.validateUser(user);
+
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new UnauthorizedException("Invalid credentials");
         }
 
         TokenPair pair = issueTokenPair(user);
+
         writeCookies(response, pair);
+
         return new AuthTokensResponse(
                 user.getId(),
                 user.getEmail(),
@@ -114,16 +121,16 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public AuthTokensResponse refresh(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = extractRefreshToken(request).orElseThrow(() -> new UnauthorizedException("Refresh token is missing"));
-        Claims claims = parseRefreshClaims(refreshToken);
+        Claims claims = jwtService.getRefreshClaims(refreshToken);
 
         UUID userId = jwtService.extractUserId(claims);
         long sessionVersion = jwtService.extractSessionVersion(claims);
         UUID refreshSessionId = jwtService.extractRefreshSessionId(claims);
 
         UserEntity user = userRepository.findById(userId).orElseThrow(() -> new UnauthorizedException("User not found"));
-        if (!user.isActive() || user.isBlock()) {
-            throw new UnauthorizedException("User is blocked or inactive");
-        }
+
+        authTokenHashHelper.validateUser(user);
+
         if (user.getSessionVersion() != sessionVersion) {
             throw new UnauthorizedException("Session version mismatch");
         }
@@ -151,7 +158,7 @@ public class AuthServiceImpl implements AuthService {
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         extractRefreshToken(request).ifPresent(token -> {
             try {
-                Claims claims = parseRefreshClaims(token);
+                Claims claims = jwtService.parseRefreshClaims(token);
                 UUID refreshSessionId = jwtService.extractRefreshSessionId(claims);
                 refreshSessionRepository.findById(refreshSessionId).ifPresent(session -> {
                     if (session.getRevokedAt() == null) {
@@ -164,16 +171,6 @@ public class AuthServiceImpl implements AuthService {
             }
         });
         authCookieService.clearAuthCookies(response);
-    }
-
-    private Claims parseRefreshClaims(String refreshToken) {
-        try {
-            Claims claims = jwtService.parseRefreshClaims(refreshToken);
-            jwtService.validateTokenType(claims, JwtService.TOKEN_TYPE_REFRESH);
-            return claims;
-        } catch (Exception exception) {
-            throw new UnauthorizedException("Invalid refresh token");
-        }
     }
 
     private TokenPair issueTokenPair(UserEntity user) {
@@ -225,20 +222,5 @@ public class AuthServiceImpl implements AuthService {
     private void writeCookies(HttpServletResponse response, TokenPair pair) {
         authCookieService.writeAccessCookie(response, pair.accessToken());
         authCookieService.writeRefreshCookie(response, pair.refreshToken());
-    }
-
-    private String normalizeText(String value) {
-        return value.trim();
-    }
-
-    private String normalizeNullableText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private record TokenPair(String accessToken, String refreshToken) {
     }
 }

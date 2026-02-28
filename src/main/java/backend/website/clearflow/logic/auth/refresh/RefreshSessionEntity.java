@@ -1,4 +1,4 @@
-package backend.website.clearflow.logic.auth;
+package backend.website.clearflow.logic.auth.refresh;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
