@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.UuidGenerator;
 
@@ -18,6 +19,7 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "users")
+@NoArgsConstructor
 public class UserEntity extends BaseEntity {
 
     @Id
@@ -55,4 +57,32 @@ public class UserEntity extends BaseEntity {
 
     @Column(name = "ozon_client_id", length = 100)
     private String ozonClientId;
+
+    public UserEntity(
+            String email, String password,
+            UserRole role, boolean isActive, boolean isBlock,
+            long sessionVersion, String ozonClientId
+    ) {
+        this.email = email;
+        this.password = password;
+        this.role = role;
+        this.isActive = isActive;
+        this.isBlock = isBlock;
+        this.sessionVersion = sessionVersion;
+        this.ozonClientId = this.normalizeNullableText(ozonClientId);
+    }
+
+    public UserEntity(
+            String email, String password,
+            UserRole role, boolean isActive, boolean isBlock,
+            long sessionVersion,  UUID parentId
+    ) {
+        this.email = email;
+        this.password = password;
+        this.role = role;
+        this.isActive = isActive;
+        this.isBlock = isBlock;
+        this.sessionVersion = sessionVersion;
+        this.parentId = parentId;
+    }
 }
