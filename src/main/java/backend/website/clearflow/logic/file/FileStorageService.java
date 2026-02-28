@@ -1,4 +1,4 @@
-package backend.website.clearflow.helper;
+package backend.website.clearflow.logic.file;
 
 import org.springframework.core.io.Resource;
 
