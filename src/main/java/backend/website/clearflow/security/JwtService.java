@@ -1,6 +1,7 @@
 package backend.website.clearflow.security;
 
 import backend.website.clearflow.config.property.JwtProperties;
+import backend.website.clearflow.model.error.UnauthorizedException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -99,5 +100,17 @@ public class JwtService {
             throw new IllegalArgumentException("refresh_session_id claim is missing");
         }
         return UUID.fromString(value);
+    }
+
+    public Claims getRefreshClaims(String refreshToken) {
+        try {
+            Claims claims = parseRefreshClaims(refreshToken);
+
+            validateTokenType(claims, JwtService.TOKEN_TYPE_REFRESH);
+
+            return claims;
+        } catch (Exception exception) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
     }
 }
