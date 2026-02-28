@@ -12,6 +12,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -23,21 +24,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class JwtCookieAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final UserRepository userRepository;
-
-    public JwtCookieAuthenticationFilter(
-            JwtService jwtService,
-            JwtProperties jwtProperties,
-            UserRepository userRepository
-    ) {
-        this.jwtService = jwtService;
-        this.jwtProperties = jwtProperties;
-        this.userRepository = userRepository;
-    }
 
     @Override
     protected void doFilterInternal(
@@ -50,14 +42,17 @@ public class JwtCookieAuthenticationFilter extends OncePerRequestFilter {
                     .flatMap(this::resolveUser)
                     .ifPresent(this::authenticate);
         }
+
         filterChain.doFilter(request, response);
     }
 
     private Optional<String> resolveToken(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
+
         if (cookies == null || cookies.length == 0) {
             return Optional.empty();
         }
+
         return Arrays.stream(cookies)
                 .filter(cookie -> jwtProperties.accessCookieName().equals(cookie.getName()))
                 .map(Cookie::getValue)
@@ -73,8 +68,9 @@ public class JwtCookieAuthenticationFilter extends OncePerRequestFilter {
             long sessionVersion = jwtService.extractSessionVersion(claims);
             return userRepository.findById(userId)
                     .filter(UserEntity::isActive)
+                    .filter(user -> !user.isBlock())
                     .filter(user -> user.getSessionVersion() == sessionVersion)
-                    .map(user -> new AuthenticatedUser(user.getId(), user.getRole(), user.isBlock(), user.isActive()));
+                    .map(user -> new AuthenticatedUser(user.getId(), user.getRole(), false, true));
         } catch (Exception ignored) {
             return Optional.empty();
         }
