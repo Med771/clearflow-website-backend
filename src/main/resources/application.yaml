@@ -51,3 +51,8 @@ app:
   storage:
     local-root: storage/uploads
     max-photo-bytes: 5242880
+
+  ozon:
+    base-url: https://api-seller.ozon.ru
+    connect-timeout-seconds: 5
+    read-timeout-seconds: 10
