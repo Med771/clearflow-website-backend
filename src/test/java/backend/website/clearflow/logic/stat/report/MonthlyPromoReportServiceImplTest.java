@@ -1,5 +1,10 @@
 package backend.website.clearflow.logic.stat.report;
 
+import backend.website.clearflow.logic.report.*;
+import backend.website.clearflow.logic.report.dto.MonthlyReportListItem;
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReport;
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReportHeader;
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReportRow;
 import backend.website.clearflow.logic.user.UserEntity;
 import backend.website.clearflow.logic.user.UserRepository;
 import backend.website.clearflow.model.UserRole;
@@ -14,16 +19,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class MonthlyPromoReportServiceImplTest {
@@ -36,6 +40,8 @@ class MonthlyPromoReportServiceImplTest {
     private MonthlyPromoReportDao monthlyPromoReportDao;
     @Mock
     private PdfMonthlyReportRenderer pdfMonthlyReportRenderer;
+    @Mock
+    private MonthlyReportRepository monthlyReportRepository;
 
     @InjectMocks
     private MonthlyPromoReportServiceImpl service;
@@ -60,8 +66,10 @@ class MonthlyPromoReportServiceImplTest {
                 ));
         byte[] expected = "pdf".getBytes();
         when(pdfMonthlyReportRenderer.render(org.mockito.ArgumentMatchers.any())).thenReturn(expected);
+        when(monthlyReportRepository.findBySellerIdAndReportMonth(sellerId, "2026-02")).thenReturn(Optional.empty());
 
-        byte[] actual = service.generateMonthlyPromoReport(null, YearMonth.of(2026, 2), null);
+        LocalDate invoiceDate = LocalDate.of(2026, 2, 20);
+        byte[] actual = service.generateMonthlyPromoReport(null, YearMonth.of(2026, 2), invoiceDate);
 
         assertArrayEquals(expected, actual);
         ArgumentCaptor<MonthlyPromoReport> captor = ArgumentCaptor.forClass(MonthlyPromoReport.class);
@@ -70,6 +78,41 @@ class MonthlyPromoReportServiceImplTest {
         assertEquals(15L, report.totalItemsSold());
         assertEquals(new BigDecimal("2000.00"), report.totalRevenue());
         assertEquals(2, report.rows().size());
+        assertEquals(invoiceDate, report.invoiceDate());
+        assertEquals("ООО Тест", report.recipient().name());
+        assertEquals("ООО Тест", report.payer().name());
+
+        ArgumentCaptor<MonthlyReportEntity> saveCaptor = ArgumentCaptor.forClass(MonthlyReportEntity.class);
+        verify(monthlyReportRepository).save(saveCaptor.capture());
+        MonthlyReportEntity saved = saveCaptor.getValue();
+        assertEquals(sellerId, saved.getSellerId());
+        assertEquals("2026-02", saved.getReportMonth());
+        assertEquals(invoiceDate, saved.getInvoiceDate());
+        assertArrayEquals(expected, saved.getPdfContent());
+    }
+
+    @Test
+    void sellerGetsCachedReportWhenExists() {
+        UUID sellerId = UUID.randomUUID();
+        UserEntity seller = new UserEntity();
+        seller.setId(sellerId);
+        seller.setRole(UserRole.SELLER);
+        when(authContextService.currentActorOrThrow()).thenReturn(seller);
+
+        byte[] cached = "cached-pdf".getBytes();
+        MonthlyReportEntity existing = new MonthlyReportEntity();
+        existing.setSellerId(sellerId);
+        existing.setReportMonth("2026-02");
+        existing.setInvoiceDate(LocalDate.of(2026, 2, 15));
+        existing.setPdfContent(cached);
+        when(monthlyReportRepository.findBySellerIdAndReportMonth(sellerId, "2026-02"))
+                .thenReturn(Optional.of(existing));
+
+        byte[] actual = service.generateMonthlyPromoReport(null, YearMonth.of(2026, 2), null);
+
+        assertArrayEquals(cached, actual);
+        verify(pdfMonthlyReportRenderer, never()).render(any());
+        verify(monthlyReportRepository, never()).save(any());
     }
 
     @Test
@@ -112,6 +155,53 @@ class MonthlyPromoReportServiceImplTest {
         when(userRepository.findById(sellerId)).thenReturn(Optional.of(seller));
         when(monthlyPromoReportDao.loadSellerHeader(sellerId)).thenReturn(Optional.empty());
 
+        when(monthlyReportRepository.findBySellerIdAndReportMonth(sellerId, "2026-01")).thenReturn(Optional.empty());
         assertThrows(NotFoundException.class, () -> service.generateMonthlyPromoReport(sellerId, YearMonth.of(2026, 1), null));
+    }
+
+    @Test
+    void listReportsSellerSeesOwn() {
+        UUID sellerId = UUID.randomUUID();
+        UserEntity seller = new UserEntity();
+        seller.setId(sellerId);
+        seller.setRole(UserRole.SELLER);
+        when(authContextService.currentActorOrThrow()).thenReturn(seller);
+
+        MonthlyReportEntity e = new MonthlyReportEntity();
+        e.setId(UUID.randomUUID());
+        e.setSellerId(sellerId);
+        e.setReportMonth("2026-01");
+        e.setInvoiceDate(LocalDate.of(2026, 1, 10));
+        e.setCreatedAt(Instant.now());
+        when(monthlyReportRepository.findAllBySellerIdOrderByReportMonthDesc(sellerId))
+                .thenReturn(List.of(e));
+
+        List<MonthlyReportListItem> list = service.listReports();
+
+        assertEquals(1, list.size());
+        assertEquals(e.getId(), list.getFirst().id());
+        assertEquals(sellerId, list.getFirst().sellerId());
+        assertEquals("2026-01", list.getFirst().reportMonth());
+    }
+
+    @Test
+    void listReportsOwnerSeesAll() {
+        UserEntity owner = new UserEntity();
+        owner.setId(UUID.randomUUID());
+        owner.setRole(UserRole.OWNER);
+        when(authContextService.currentActorOrThrow()).thenReturn(owner);
+
+        MonthlyReportEntity e = new MonthlyReportEntity();
+        e.setId(UUID.randomUUID());
+        e.setSellerId(UUID.randomUUID());
+        e.setReportMonth("2026-02");
+        e.setInvoiceDate(LocalDate.of(2026, 2, 1));
+        e.setCreatedAt(Instant.now());
+        when(monthlyReportRepository.findAllByOrderByReportMonthDesc()).thenReturn(List.of(e));
+
+        List<MonthlyReportListItem> list = service.listReports();
+
+        assertEquals(1, list.size());
+        assertEquals(e.getId(), list.getFirst().id());
     }
 }
