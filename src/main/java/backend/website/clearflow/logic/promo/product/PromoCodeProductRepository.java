@@ -1,4 +1,4 @@
-package backend.website.clearflow.logic.promo;
+package backend.website.clearflow.logic.promo.product;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
