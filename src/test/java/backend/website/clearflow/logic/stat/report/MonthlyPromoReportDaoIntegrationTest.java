@@ -114,6 +114,8 @@ class MonthlyPromoReportDaoIntegrationTest {
         );
 
         assertEquals(2, rows.size());
+        assertEquals("ProductB", rows.get(0).productName());
+        assertEquals("ProductA", rows.get(1).productName());
         assertEquals(300.00, rows.get(0).revenue().doubleValue(), 0.001);
         assertEquals(200.00, rows.get(1).revenue().doubleValue(), 0.001);
     }

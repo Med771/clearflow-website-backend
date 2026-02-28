@@ -4,5 +4,5 @@ import java.time.YearMonth;
 import java.util.UUID;
 
 public interface MonthlyPromoReportService {
-    byte[] generateMonthlyPromoReport(UUID sellerId, YearMonth month);
+    byte[] generateMonthlyPromoReport(UUID sellerId, YearMonth month, MonthlyPromoReportDocumentOptions options);
 }

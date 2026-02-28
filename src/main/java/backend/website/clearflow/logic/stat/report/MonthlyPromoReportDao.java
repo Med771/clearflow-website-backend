@@ -59,14 +59,16 @@ public class MonthlyPromoReportDao {
                 SELECT
                     pc.id AS promo_code_id,
                     pc.name AS promo_code_name,
+                    p.name AS product_name,
                     COALESCE(SUM(psd.items_count), 0) AS items_sold,
                     COALESCE(SUM(psd.revenue), 0)::numeric(18,2) AS revenue
                 FROM promo_stats_daily psd
                 JOIN promo_codes pc ON pc.id = psd.promo_code_id
+                JOIN products p ON p.id = psd.product_id
                 WHERE psd.seller_id = :sellerId
                   AND psd.stat_date BETWEEN :fromDate AND :toDate
-                GROUP BY pc.id, pc.name
-                ORDER BY revenue DESC, items_sold DESC, promo_code_name
+                GROUP BY pc.id, pc.name, p.name
+                ORDER BY revenue DESC, items_sold DESC, promo_code_name, product_name
                 """;
         List<?> rows = entityManager.createNativeQuery(sql)
                 .setParameter("sellerId", sellerId)
@@ -78,8 +80,9 @@ public class MonthlyPromoReportDao {
                 .map(row -> new MonthlyPromoReportRow(
                         UUID.fromString(String.valueOf(row[0])),
                         asString(row[1]),
-                        ((Number) row[2]).longValue(),
-                        asBigDecimal(row[3])
+                        asString(row[2]),
+                        ((Number) row[3]).longValue(),
+                        asBigDecimal(row[4])
                 ))
                 .toList();
     }

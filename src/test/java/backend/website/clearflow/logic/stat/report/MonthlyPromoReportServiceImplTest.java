@@ -55,13 +55,13 @@ class MonthlyPromoReportServiceImplTest {
         when(monthlyPromoReportDao.loadSellerHeader(sellerId)).thenReturn(Optional.of(header));
         when(monthlyPromoReportDao.loadPromoRows(sellerId, YearMonth.of(2026, 2).atDay(1), YearMonth.of(2026, 2).atEndOfMonth()))
                 .thenReturn(List.of(
-                        new MonthlyPromoReportRow(UUID.randomUUID(), "PROMO1", 10, new BigDecimal("1500.50")),
-                        new MonthlyPromoReportRow(UUID.randomUUID(), "PROMO2", 5, new BigDecimal("499.50"))
+                        new MonthlyPromoReportRow(UUID.randomUUID(), "PROMO1", "Товар 1", 10, new BigDecimal("1500.50")),
+                        new MonthlyPromoReportRow(UUID.randomUUID(), "PROMO2", "Товар 2", 5, new BigDecimal("499.50"))
                 ));
         byte[] expected = "pdf".getBytes();
         when(pdfMonthlyReportRenderer.render(org.mockito.ArgumentMatchers.any())).thenReturn(expected);
 
-        byte[] actual = service.generateMonthlyPromoReport(null, YearMonth.of(2026, 2));
+        byte[] actual = service.generateMonthlyPromoReport(null, YearMonth.of(2026, 2), null);
 
         assertArrayEquals(expected, actual);
         ArgumentCaptor<MonthlyPromoReport> captor = ArgumentCaptor.forClass(MonthlyPromoReport.class);
@@ -79,7 +79,7 @@ class MonthlyPromoReportServiceImplTest {
         admin.setRole(UserRole.ADMIN);
         when(authContextService.currentActorOrThrow()).thenReturn(admin);
 
-        assertThrows(BadRequestException.class, () -> service.generateMonthlyPromoReport(null, YearMonth.now()));
+        assertThrows(BadRequestException.class, () -> service.generateMonthlyPromoReport(null, YearMonth.now(), null));
     }
 
     @Test
@@ -95,7 +95,7 @@ class MonthlyPromoReportServiceImplTest {
         manager.setRole(UserRole.MANAGER);
         when(userRepository.findById(targetId)).thenReturn(Optional.of(manager));
 
-        assertThrows(BadRequestException.class, () -> service.generateMonthlyPromoReport(targetId, YearMonth.now()));
+        assertThrows(BadRequestException.class, () -> service.generateMonthlyPromoReport(targetId, YearMonth.now(), null));
     }
 
     @Test
@@ -112,6 +112,6 @@ class MonthlyPromoReportServiceImplTest {
         when(userRepository.findById(sellerId)).thenReturn(Optional.of(seller));
         when(monthlyPromoReportDao.loadSellerHeader(sellerId)).thenReturn(Optional.empty());
 
-        assertThrows(NotFoundException.class, () -> service.generateMonthlyPromoReport(sellerId, YearMonth.of(2026, 1)));
+        assertThrows(NotFoundException.class, () -> service.generateMonthlyPromoReport(sellerId, YearMonth.of(2026, 1), null));
     }
 }

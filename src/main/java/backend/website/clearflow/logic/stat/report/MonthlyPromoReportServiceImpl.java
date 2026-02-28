@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
@@ -27,7 +28,7 @@ public class MonthlyPromoReportServiceImpl implements MonthlyPromoReportService 
 
     @Override
     @Transactional(readOnly = true)
-    public byte[] generateMonthlyPromoReport(UUID sellerId, YearMonth month) {
+    public byte[] generateMonthlyPromoReport(UUID sellerId, YearMonth month, MonthlyPromoReportDocumentOptions options) {
         UserEntity actor = authContextService.currentActorOrThrow();
         UUID targetSellerId = resolveTargetSellerId(actor, sellerId);
         YearMonth targetMonth = month != null ? month : YearMonth.now();
@@ -43,10 +44,23 @@ public class MonthlyPromoReportServiceImpl implements MonthlyPromoReportService 
         BigDecimal totalRevenue = rows.stream()
                 .map(MonthlyPromoReportRow::revenue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        MonthlyPromoReportPartyDetails recipient = new MonthlyPromoReportPartyDetails(
+                firstNotBlank(header.companyName(), header.fullName()),
+                header.inn(),
+                header.bankName(),
+                header.bik(),
+                header.settlementAccount(),
+                header.corporateAccount(),
+                header.address()
+        );
+        MonthlyPromoReportDocumentOptions docOptions = options != null ? options : new MonthlyPromoReportDocumentOptions(null, null, null);
 
         MonthlyPromoReport report = new MonthlyPromoReport(
                 targetMonth,
-                header,
+                resolveInvoiceNumber(docOptions.invoiceNumber(), targetMonth, targetSellerId),
+                docOptions.invoiceDate() != null ? docOptions.invoiceDate() : LocalDate.now(),
+                recipient,
+                docOptions.payer(),
                 rows,
                 totalItemsSold,
                 totalRevenue
@@ -69,5 +83,20 @@ public class MonthlyPromoReportServiceImpl implements MonthlyPromoReportService 
             return requestedSellerId;
         }
         throw new ForbiddenException("Role cannot generate report");
+    }
+
+    private String resolveInvoiceNumber(String requested, YearMonth month, UUID sellerId) {
+        if (requested != null && !requested.isBlank()) {
+            return requested.trim();
+        }
+        String shortSellerId = sellerId.toString().substring(0, 8);
+        return month.toString().replace("-", "") + "-" + shortSellerId;
+    }
+
+    private String firstNotBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second;
     }
 }

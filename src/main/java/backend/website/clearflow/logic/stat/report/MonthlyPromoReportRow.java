@@ -6,6 +6,7 @@ import java.util.UUID;
 public record MonthlyPromoReportRow(
         UUID promoCodeId,
         String promoCodeName,
+        String productName,
         long itemsSold,
         BigDecimal revenue
 ) {
