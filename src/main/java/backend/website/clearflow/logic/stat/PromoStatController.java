@@ -5,16 +5,12 @@ import backend.website.clearflow.logic.stat.dto.PromoStatDailyResponse;
 import backend.website.clearflow.logic.stat.dto.ProductStatsDashboardResponse;
 import backend.website.clearflow.logic.stat.dto.PromoStatsDashboardResponse;
 import backend.website.clearflow.logic.stat.dto.UpsertPromoStatDailyRequest;
-import backend.website.clearflow.logic.stat.report.MonthlyPromoReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,9 +25,6 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
-import backend.website.clearflow.logic.stat.report.MonthlyPromoReportDocumentOptions;
-import backend.website.clearflow.logic.stat.report.MonthlyPromoReportPartyDetails;
-
 @RestController
 @RequestMapping("/stats/promo")
 @RequiredArgsConstructor
@@ -39,7 +32,7 @@ import backend.website.clearflow.logic.stat.report.MonthlyPromoReportPartyDetail
 public class PromoStatController {
 
     private final PromoStatService promoStatService;
-    private final MonthlyPromoReportService monthlyPromoReportService;
+
 
     @PatchMapping("/daily")
     @ResponseStatus(HttpStatus.OK)
@@ -81,41 +74,6 @@ public class PromoStatController {
         return promoStatService.getProductDashboard(sellerId, productId, parseYearMonth(month), topLimit);
     }
 
-    @GetMapping(value = "/monthly-report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
-    @Operation(summary = "PDF-отчет за месяц по промокодам", description = "Генерирует PDF-отчет продавца за выбранный месяц: реквизиты, таблица по промокодам (кол-во и доход), итоговые суммы.")
-    public ResponseEntity<byte[]> getMonthlyPromoReportPdf(
-            @Parameter(description = "Идентификатор продавца (для OWNER/ADMIN)") @RequestParam(required = false) UUID sellerId,
-            @Parameter(description = "Месяц в формате YYYY-MM") @RequestParam(required = false) String month,
-            @Parameter(description = "Номер счета (если не передан, формируется автоматически)") @RequestParam(required = false) String invoiceNumber,
-            @Parameter(description = "Дата счета в формате YYYY-MM-DD (если не передана, используется текущая дата)") @RequestParam(required = false) LocalDate invoiceDate,
-            @Parameter(description = "Плательщик: наименование/ФИО") @RequestParam(required = false) String payerName,
-            @Parameter(description = "Плательщик: ИНН") @RequestParam(required = false) String payerInn,
-            @Parameter(description = "Плательщик: банк") @RequestParam(required = false) String payerBankName,
-            @Parameter(description = "Плательщик: БИК") @RequestParam(required = false) String payerBik,
-            @Parameter(description = "Плательщик: расчетный счет") @RequestParam(required = false) String payerSettlementAccount,
-            @Parameter(description = "Плательщик: корпоративный счет") @RequestParam(required = false) String payerCorporateAccount,
-            @Parameter(description = "Плательщик: адрес") @RequestParam(required = false) String payerAddress,
-            @Parameter(description = "Открывать в браузере (true) или скачивать файлом (false)") @RequestParam(defaultValue = "false") boolean inline
-    ) {
-        YearMonth targetMonth = parseYearMonth(month);
-        MonthlyPromoReportPartyDetails payer = isAnyFilled(
-                payerName, payerInn, payerBankName, payerBik, payerSettlementAccount, payerCorporateAccount, payerAddress
-        ) ? new MonthlyPromoReportPartyDetails(
-                payerName, payerInn, payerBankName, payerBik, payerSettlementAccount, payerCorporateAccount, payerAddress
-        ) : null;
-        byte[] content = monthlyPromoReportService.generateMonthlyPromoReport(
-                sellerId,
-                targetMonth,
-                new MonthlyPromoReportDocumentOptions(invoiceNumber, invoiceDate, payer)
-        );
-        String filename = "promo-report-" + targetMonth + ".pdf";
-        String disposition = (inline ? "inline" : "attachment") + "; filename=\"" + filename + "\"";
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
-                .body(content);
-    }
-
     private YearMonth parseYearMonth(String month) {
         if (month == null || month.isBlank()) {
             return YearMonth.now();
@@ -125,14 +83,5 @@ public class PromoStatController {
         } catch (DateTimeParseException exception) {
             throw new backend.website.clearflow.model.error.BadRequestException("month must be in yyyy-MM format");
         }
-    }
-
-    private boolean isAnyFilled(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return true;
-            }
-        }
-        return false;
     }
 }

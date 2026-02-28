@@ -42,12 +42,13 @@ public class SecurityConfig {
                         .requestMatchers("/auth/**").permitAll()
 
                         .requestMatchers("/profile/**").authenticated()
+                        .requestMatchers("/report/**").authenticated()
                         .requestMatchers("/verification/**").authenticated()
                         .requestMatchers("/users/**").authenticated()
                         .requestMatchers("/products/**").authenticated()
                         .requestMatchers("/promo-codes/**").authenticated()
                         .requestMatchers("/stats/**").authenticated()
-                        .anyRequest().denyAll()
+                        .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
