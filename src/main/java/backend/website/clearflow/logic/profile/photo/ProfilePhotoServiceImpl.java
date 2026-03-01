@@ -1,7 +1,7 @@
 package backend.website.clearflow.logic.profile.photo;
 
 import backend.website.clearflow.config.property.StorageProperties;
-import backend.website.clearflow.helper.FileStorageService;
+import backend.website.clearflow.logic.file.FileStorageService;
 import backend.website.clearflow.logic.profile.photo.dto.ProfilePhotoResponse;
 import backend.website.clearflow.logic.user.UserEntity;
 import backend.website.clearflow.model.error.BadRequestException;

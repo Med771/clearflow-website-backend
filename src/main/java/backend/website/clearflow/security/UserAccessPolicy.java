@@ -1,5 +1,6 @@
-package backend.website.clearflow.logic.user;
+package backend.website.clearflow.security;
 
+import backend.website.clearflow.logic.user.UserEntity;
 import backend.website.clearflow.model.UserRole;
 import org.springframework.stereotype.Component;
 

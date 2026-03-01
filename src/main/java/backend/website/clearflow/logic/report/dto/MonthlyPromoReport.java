@@ -1,4 +1,4 @@
-package backend.website.clearflow.logic.stat.report;
+package backend.website.clearflow.logic.report.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;

@@ -1,5 +1,6 @@
-package backend.website.clearflow.logic.stat.report;
+package backend.website.clearflow.logic.report;
 
+import backend.website.clearflow.logic.report.dto.*;
 import backend.website.clearflow.logic.user.UserEntity;
 import backend.website.clearflow.logic.user.UserRepository;
 import backend.website.clearflow.model.UserRole;
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -25,14 +27,35 @@ public class MonthlyPromoReportServiceImpl implements MonthlyPromoReportService 
     private final UserRepository userRepository;
     private final MonthlyPromoReportDao monthlyPromoReportDao;
     private final PdfMonthlyReportRenderer pdfMonthlyReportRenderer;
+    private final MonthlyReportRepository monthlyReportRepository;
 
     @Override
-    @Transactional(readOnly = true)
-    public byte[] generateMonthlyPromoReport(UUID sellerId, YearMonth month, MonthlyPromoReportDocumentOptions options) {
+    @Transactional
+    public byte[] generateMonthlyPromoReport(UUID sellerId, YearMonth month, LocalDate invoiceDate) {
         UserEntity actor = authContextService.currentActorOrThrow();
         UUID targetSellerId = resolveTargetSellerId(actor, sellerId);
         YearMonth targetMonth = month != null ? month : YearMonth.now();
+        LocalDate effectiveInvoiceDate = invoiceDate != null ? invoiceDate : LocalDate.now();
 
+        Optional<MonthlyReportEntity> existing = monthlyReportRepository.findBySellerIdAndReportMonth(
+                targetSellerId, targetMonth.toString());
+        if (existing.isPresent()) {
+            return existing.get().getPdfContent();
+        }
+
+        byte[] pdfContent = buildAndRenderReport(targetSellerId, targetMonth, effectiveInvoiceDate);
+
+        MonthlyReportEntity entity = new MonthlyReportEntity();
+        entity.setSellerId(targetSellerId);
+        entity.setReportMonth(targetMonth.toString());
+        entity.setInvoiceDate(effectiveInvoiceDate);
+        entity.setPdfContent(pdfContent);
+        monthlyReportRepository.save(entity);
+
+        return pdfContent;
+    }
+
+    private byte[] buildAndRenderReport(UUID targetSellerId, YearMonth targetMonth, LocalDate effectiveInvoiceDate) {
         MonthlyPromoReportHeader header = monthlyPromoReportDao.loadSellerHeader(targetSellerId)
                 .orElseThrow(() -> new NotFoundException("Seller not found"));
         List<MonthlyPromoReportRow> rows = monthlyPromoReportDao.loadPromoRows(
@@ -53,14 +76,13 @@ public class MonthlyPromoReportServiceImpl implements MonthlyPromoReportService 
                 header.corporateAccount(),
                 header.address()
         );
-        MonthlyPromoReportDocumentOptions docOptions = options != null ? options : new MonthlyPromoReportDocumentOptions(null, null, null);
 
         MonthlyPromoReport report = new MonthlyPromoReport(
                 targetMonth,
-                resolveInvoiceNumber(docOptions.invoiceNumber(), targetMonth, targetSellerId),
-                docOptions.invoiceDate() != null ? docOptions.invoiceDate() : LocalDate.now(),
+                resolveInvoiceNumber(targetMonth, targetSellerId),
+                effectiveInvoiceDate,
                 recipient,
-                docOptions.payer(),
+                recipient,
                 rows,
                 totalItemsSold,
                 totalRevenue
@@ -85,12 +107,32 @@ public class MonthlyPromoReportServiceImpl implements MonthlyPromoReportService 
         throw new ForbiddenException("Role cannot generate report");
     }
 
-    private String resolveInvoiceNumber(String requested, YearMonth month, UUID sellerId) {
-        if (requested != null && !requested.isBlank()) {
-            return requested.trim();
-        }
+    private String resolveInvoiceNumber(YearMonth month, UUID sellerId) {
         String shortSellerId = sellerId.toString().substring(0, 8);
         return month.toString().replace("-", "") + "-" + shortSellerId;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MonthlyReportListItem> listReports() {
+        UserEntity actor = authContextService.currentActorOrThrow();
+        List<MonthlyReportEntity> entities;
+        if (actor.getRole() == UserRole.SELLER) {
+            entities = monthlyReportRepository.findAllBySellerIdOrderByReportMonthDesc(actor.getId());
+        } else if (actor.getRole() == UserRole.ADMIN || actor.getRole() == UserRole.OWNER) {
+            entities = monthlyReportRepository.findAllByOrderByReportMonthDesc();
+        } else {
+            throw new ForbiddenException("Role cannot list reports");
+        }
+        return entities.stream()
+                .map(e -> new MonthlyReportListItem(
+                        e.getId(),
+                        e.getSellerId(),
+                        e.getReportMonth(),
+                        e.getInvoiceDate(),
+                        e.getCreatedAt()
+                ))
+                .toList();
     }
 
     private String firstNotBlank(String first, String second) {

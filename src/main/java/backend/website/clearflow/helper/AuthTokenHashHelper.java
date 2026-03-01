@@ -1,5 +1,7 @@
 package backend.website.clearflow.helper;
 
+import backend.website.clearflow.logic.user.UserEntity;
+import backend.website.clearflow.model.error.UnauthorizedException;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -16,6 +18,12 @@ public class AuthTokenHashHelper {
             return HexFormat.of().formatHex(hashed);
         } catch (Exception exception) {
             throw new IllegalStateException("Could not hash token", exception);
+        }
+    }
+
+    public void validateUser(UserEntity user) {
+        if (!user.isActive() || user.isBlock()) {
+            throw new UnauthorizedException("User is blocked or inactive");
         }
     }
 }

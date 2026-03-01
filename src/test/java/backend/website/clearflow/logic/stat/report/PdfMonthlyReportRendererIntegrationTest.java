@@ -1,5 +1,9 @@
 package backend.website.clearflow.logic.stat.report;
 
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReport;
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReportPartyDetails;
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReportRow;
+import backend.website.clearflow.logic.report.PdfMonthlyReportRenderer;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

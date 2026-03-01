@@ -30,4 +30,14 @@ public abstract class BaseEntity {
     @CreatedBy
     @Column(name = "creator_id", updatable = false)
     private UUID creatorId;
+
+    protected String normalizeNullableText(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 }

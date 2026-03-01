@@ -12,6 +12,7 @@ import backend.website.clearflow.model.error.BadRequestException;
 import backend.website.clearflow.model.error.ForbiddenException;
 import backend.website.clearflow.model.error.NotFoundException;
 import backend.website.clearflow.security.AuthContextService;
+import backend.website.clearflow.security.UserAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -65,17 +66,22 @@ public class UserServiceImpl implements UserService {
             throw new BadRequestException("Email already exists");
         }
 
-        UserEntity entity = new UserEntity();
-        entity.setEmail(request.email().trim().toLowerCase());
-        entity.setPassword(passwordEncoder.encode(request.password()));
-        entity.setRole(request.role());
-        entity.setBlock(false);
-        entity.setActive(true);
-        entity.setSessionVersion(0);
-        entity.setParentId(resolveParentId(actor, request));
+        UserEntity entity = new UserEntity(
+                request.email().trim().toLowerCase(),
+                passwordEncoder.encode(request.password()),
+                request.role(),
+                false,
+                true,
+                0,
+                resolveParentId(actor, request)
+        );
+
         applyOzonCredentials(entity, request.role(), request.ozonClientId(), request.ozonApiKey());
+
         UserEntity saved = userRepository.save(entity);
+
         initializeSellerProfileForManagedCreation(saved, actor);
+
         return userMapper.toResponse(saved);
     }
 

@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
@@ -18,6 +19,7 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "seller_profiles")
+@NoArgsConstructor
 public class SellerProfileEntity extends BaseEntity {
 
     @Id
@@ -69,4 +71,33 @@ public class SellerProfileEntity extends BaseEntity {
 
     @Column(name = "verified_by")
     private UUID verifiedBy;
+
+    public SellerProfileEntity(
+            UUID userId,
+            String fullName,
+            String contactPhone,
+            String companyName,
+            String inn,
+            String bankName,
+            String bik,
+            String settlementAccount,
+            String corporateAccount,
+            String address,
+            String ozonSellerLink
+    ) {
+        this.userId = userId;
+        this.fullName = normalizeNullableText(fullName);
+        this.contactPhone = normalizeNullableText(contactPhone);
+        this.companyName = normalizeNullableText(companyName);
+        this.inn = normalizeNullableText(inn);
+        this.bankName = normalizeNullableText(bankName);
+        this.bik = normalizeNullableText(bik);
+        this.settlementAccount = normalizeNullableText(settlementAccount);
+        this.corporateAccount = normalizeNullableText(corporateAccount);
+        this.address = normalizeNullableText(address);
+        this.ozonSellerLink = normalizeNullableText(ozonSellerLink);
+        this.verificationStatus = SellerVerificationStatus.PENDING;
+        this.verificationComment = "Profile is waiting for admin review";
+        this.verificationSubmittedAt = Instant.now();
+    }
 }

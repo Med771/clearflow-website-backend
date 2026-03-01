@@ -1,6 +1,8 @@
-package backend.website.clearflow.logic.user;
+package backend.website.clearflow.runner;
 
 import backend.website.clearflow.config.property.OwnerProperties;
+import backend.website.clearflow.logic.user.UserEntity;
+import backend.website.clearflow.logic.user.UserRepository;
 import backend.website.clearflow.model.UserRole;
 import lombok.NonNull;
 import org.springframework.boot.ApplicationArguments;

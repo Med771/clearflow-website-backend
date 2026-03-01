@@ -1,5 +1,7 @@
-package backend.website.clearflow.logic.stat.report;
+package backend.website.clearflow.logic.report;
 
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReportHeader;
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReportRow;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;

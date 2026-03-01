@@ -1,4 +1,4 @@
-package backend.website.clearflow.logic.promo;
+package backend.website.clearflow.logic.promo.product;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;

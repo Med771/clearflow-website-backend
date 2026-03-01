@@ -1,5 +1,7 @@
 package backend.website.clearflow.logic.stat.report;
 
+import backend.website.clearflow.logic.report.MonthlyPromoReportDao;
+import backend.website.clearflow.logic.report.dto.MonthlyPromoReportRow;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
