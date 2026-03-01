@@ -73,3 +73,14 @@ app:
       - Accept
       - Origin
     allow-credentials: true
+
+    swagger:
+      title: "API"
+      description: "Документация API"
+      version: "0.1.0"
+
+      servers:
+        - url: "http://localhost:8080"
+          description: "Local Dev Server"
+        - url: "https://api.example.com"
+          description: "Production Server"
